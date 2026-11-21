@@ -6,6 +6,6 @@
   "description": "The storefront of the qadots poly shop; it calls the catalog API (qadots-poly-api) at API_URL.",
   "scripts": {
     "start": "node src/server.mjs",
-    "test": "node --test test/"
+    "test": "node --test"
   }
 }
