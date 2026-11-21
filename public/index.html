@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 44rem; margin: 2rem auto; padding: 0 1rem; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
+  th, td { text-align: left; padding: .4rem .25rem; border-bottom: 1px solid #ddd; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  button { padding: .3rem .8rem; font: inherit; }
+  .low { color: #9a4b00; font-size: .85em; }
+  .error { color: #b00020; }
+</style>
+</head>
+<body>
+<h1>Shop</h1>
+<table aria-label="Products">
+  <thead><tr><th>Product</th><th class="num">Price</th><th class="num">In stock</th><th></th></tr></thead>
+  <tbody id="products"></tbody>
+</table>
+<h2>Cart</h2>
+<p id="empty">Your cart is empty.</p>
+<ul id="cart" aria-label="Cart"></ul>
+<p id="total" aria-live="polite"></p>
+<p id="error" class="error" role="alert" hidden></p>
+<p><small id="version"></small></p>
+<script>
+const $ = (id) => document.getElementById(id);
+const cart = new Map();
+let products = [];
+const money = (n) => '$' + n.toFixed(2);
+
+async function total() {
+  $('empty').hidden = cart.size > 0;
+  $('cart').replaceChildren(...[...cart].map(([id, qty]) => {
+    const li = document.createElement('li');
+    li.textContent = qty + ' x ' + products.find((p) => p.id === id).name;
+    return li;
+  }));
+  if (!cart.size) { $('total').textContent = ''; $('error').hidden = true; return; }
+  const res = await fetch('/api/cart/total', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items: [...cart].map(([id, qty]) => ({ id, qty })) }) });
+  const body = await res.json();
+  $('error').hidden = res.ok;
+  if (res.ok) $('total').textContent = 'Total: ' + money(body.total);
+  else $('error').textContent = body.error;
+}
+
+async function load() {
+  ({ products } = await (await fetch('/api/products')).json());
+  $('products').replaceChildren(...products.map((p) => {
+    const tr = document.createElement('tr');
+    const name = document.createElement('td');
+    name.textContent = p.name;
+    if (p.stock > 0 && p.stock <= 5) {
+      const low = document.createElement('span');
+      low.className = 'low';
+      low.textContent = ' only ' + p.stock + ' left';
+      name.append(low);
+    }
+    const price = document.createElement('td');
+    price.className = 'num';
+    price.textContent = money(p.price);
+    const stock = document.createElement('td');
+    stock.className = 'num';
+    stock.textContent = p.stock;
+    const act = document.createElement('td');
+    const add = document.createElement('button');
+    add.textContent = 'Add';
+    add.setAttribute('aria-label', 'Add ' + p.name);
+    add.disabled = p.stock === 0;
+    add.onclick = () => { cart.set(p.id, (cart.get(p.id) ?? 0) + 1); total(); };
+    act.append(add);
+    tr.append(name, price, stock, act);
+    return tr;
+  }));
+}
+fetch('/version').then((r) => r.json()).then((v) => { $('version').textContent = 'web v' + v.version + (v.sha ? ' ' + v.sha.slice(0, 7) : '') + (v.api ? ' / api v' + v.api.version : ''); });
+load().then(total);
+</script>
+</body>
+</html>
