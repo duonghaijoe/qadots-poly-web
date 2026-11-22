@@ -2,7 +2,12 @@
 import { readFileSync } from 'node:fs';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-const page = () => readFileSync(new URL('../public/index.html', import.meta.url));
+const PAGES = {
+  '/': ['index.html', 'text/html; charset=utf-8'],
+  '/index.html': ['index.html', 'text/html; charset=utf-8'],
+  '/catalog.mjs': ['catalog.mjs', 'text/javascript; charset=utf-8'],
+};
+const file = (name) => readFileSync(new URL(`../public/${name}`, import.meta.url));
 
 export function appFor(info = {}) {
   const api = info.apiUrl ?? 'http://127.0.0.1:4721';
@@ -37,9 +42,10 @@ export function appFor(info = {}) {
         return res.end(JSON.stringify({ error: 'the catalog is not answering' }));
       }
     }
-    if (url.pathname === '/' || url.pathname === '/index.html') {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(page());
+    const served = PAGES[url.pathname];
+    if (served) {
+      res.writeHead(200, { 'content-type': served[1] });
+      return res.end(file(served[0]));
     }
     res.writeHead(404, { 'content-type': 'text/plain' });
     res.end('not found');
