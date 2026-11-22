@@ -12,6 +12,7 @@
   button { padding: .3rem .8rem; font: inherit; }
   .low { color: #9a4b00; font-size: .85em; }
   .error { color: #b00020; }
+  .pager { display: flex; align-items: center; gap: .75rem; margin: -1rem 0 1.5rem; }
 </style>
 </head>
 <body>
@@ -20,23 +21,32 @@
   <thead><tr><th>Product</th><th class="num">Price</th><th class="num">In stock</th><th></th></tr></thead>
   <tbody id="products"></tbody>
 </table>
+<nav class="pager" aria-label="Product pages">
+  <button id="prev">Previous</button>
+  <span id="range" aria-live="polite"></span>
+  <button id="next">Next</button>
+</nav>
 <h2>Cart</h2>
 <p id="empty">Your cart is empty.</p>
 <ul id="cart" aria-label="Cart"></ul>
 <p id="total" aria-live="polite"></p>
 <p id="error" class="error" role="alert" hidden></p>
 <p><small id="version"></small></p>
-<script>
+<script type="module">
+import { PAGE_SIZE, loadPage, rangeText } from '/catalog.mjs';
+
 const $ = (id) => document.getElementById(id);
 const cart = new Map();
-let products = [];
+// Every product seen on any page, so the cart can name items from pages no longer shown.
+const known = new Map();
+let page = { offset: 0 };
 const money = (n) => '$' + n.toFixed(2);
 
 async function total() {
   $('empty').hidden = cart.size > 0;
   $('cart').replaceChildren(...[...cart].map(([id, qty]) => {
     const li = document.createElement('li');
-    li.textContent = qty + ' x ' + products.find((p) => p.id === id).name;
+    li.textContent = qty + ' x ' + known.get(id).name;
     return li;
   }));
   if (!cart.size) { $('total').textContent = ''; $('error').hidden = true; return; }
@@ -47,9 +57,19 @@ async function total() {
   else $('error').textContent = body.error;
 }
 
-async function load() {
-  ({ products } = await (await fetch('/api/products')).json());
-  $('products').replaceChildren(...products.map((p) => {
+async function load(offset) {
+  try {
+    page = await loadPage(offset);
+  } catch (e) {
+    $('error').textContent = e.message;
+    $('error').hidden = false;
+    return;
+  }
+  page.products.forEach((p) => known.set(p.id, p));
+  $('range').textContent = rangeText(page);
+  $('prev').disabled = !page.hasPrev;
+  $('next').disabled = !page.hasNext;
+  $('products').replaceChildren(...page.products.map((p) => {
     const tr = document.createElement('tr');
     const name = document.createElement('td');
     name.textContent = p.name;
@@ -77,7 +97,9 @@ async function load() {
   }));
 }
 fetch('/version').then((r) => r.json()).then((v) => { $('version').textContent = 'web v' + v.version + (v.sha ? ' ' + v.sha.slice(0, 7) : '') + (v.api ? ' / api v' + v.api.version : ''); });
-load().then(total);
+$('prev').onclick = () => load(Math.max(0, page.offset - PAGE_SIZE));
+$('next').onclick = () => load(page.offset + page.products.length);
+load(0).then(total);
 </script>
 </body>
 </html>
